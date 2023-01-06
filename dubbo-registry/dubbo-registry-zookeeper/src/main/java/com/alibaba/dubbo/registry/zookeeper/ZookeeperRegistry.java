@@ -132,13 +132,14 @@ public class ZookeeperRegistry extends FailbackRegistry {
             if (Constants.ANY_VALUE.equals(url.getServiceInterface())) { // 订阅所有的数据
                 String root = toRootPath();
                 ConcurrentMap<NotifyListener, ChildListener> listeners = zkListeners.get(url);
-                if (listeners == null) {
+                if (listeners == null) { // listeners为空说明缓存中没有，这里把1 isteners放入缓存
                     zkListeners.putIfAbsent(url, new ConcurrentHashMap<NotifyListener, ChildListener>());
                     listeners = zkListeners.get(url);
                 }
                 ChildListener zkListener = listeners.get(listener);
-                if (zkListener == null) {
+                if (zkListener == null) { //zkListener 为空，说明是第一次，新建一个listener
                     listeners.putIfAbsent(listener, new ChildListener() {
+                        //这是内部类的方法，不会立即执行，只会在触发变更通知时执行
                         @Override
                         public void childChanged(String parentPath, List<String> currentChilds) {
                             for (String child : currentChilds) {
