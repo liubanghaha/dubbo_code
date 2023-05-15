@@ -164,7 +164,9 @@ public class ReferenceConfig<T> extends AbstractReferenceConfig {
         if (destroyed) {
             throw new IllegalStateException("Already destroyed!");
         }
+        // 检测 ref 是否为空，为空则通过 init 方法创建
         if (ref == null) {
+            // init 方法主要用于处理配置，以及调用 createProxy 生成代理类
             init();
         }
         return ref;
@@ -341,6 +343,14 @@ public class ReferenceConfig<T> extends AbstractReferenceConfig {
         ApplicationModel.initConsumerModel(getUniqueServiceName(), consumerModel);
     }
 
+    /**
+     * 1、如果是本地调用，直接jvm 协议从内存中获取实例
+     * 2、如果只有一个注册中心，直接通过 Protocol 自适应拓展类构建 Invoker 实例接口
+     * 3、如果有多个注册中心，此时先根据 url 构建 Invoker。然后再通过 Cluster 合并多个 Invoker，最后
+     * 调用 ProxyFactory 生成代理类
+     * @param map
+     * @return
+     */
     @SuppressWarnings({"unchecked", "rawtypes", "deprecation"})
     private T createProxy(Map<String, String> map) {
         URL tmpUrl = new URL("temp", "localhost", 0, map);
@@ -381,6 +391,7 @@ public class ReferenceConfig<T> extends AbstractReferenceConfig {
                     }
                 }
             } else { // assemble URL from register center's configuration
+                // 加载注册中心 url
                 List<URL> us = loadRegistries(false);
                 if (us != null && !us.isEmpty()) {
                     for (URL u : us) {
@@ -388,6 +399,7 @@ public class ReferenceConfig<T> extends AbstractReferenceConfig {
                         if (monitorUrl != null) {
                             map.put(Constants.MONITOR_KEY, URL.encode(monitorUrl.toFullString()));
                         }
+                        // 添加 refer 参数到 url 中，并将 url 添加到 urls 中
                         urls.add(u.addParameterAndEncoded(Constants.REFER_KEY, StringUtils.toQueryString(map)));
                     }
                 }
@@ -395,13 +407,18 @@ public class ReferenceConfig<T> extends AbstractReferenceConfig {
                     throw new IllegalStateException("No such any registry to reference " + interfaceName + " on the consumer " + NetUtils.getLocalHost() + " use dubbo version " + Version.getVersion() + ", please config <dubbo:registry address=\"...\" /> to your spring config.");
                 }
             }
-
+            // 单个注册中心或服务提供者(服务直连，下同)
             if (urls.size() == 1) {
+                // 调用 RegistryProtocol 的 refer 构建 Invoker 实例
                 invoker = refprotocol.refer(interfaceClass, urls.get(0));
             } else {
+                // 多个注册中心或多个服务提供者，或者两者混合
                 List<Invoker<?>> invokers = new ArrayList<Invoker<?>>();
                 URL registryURL = null;
+                // 获取所有的 Invoker
                 for (URL url : urls) {
+                    // 通过 refprotocol 调用 refer 构建 Invoker，refprotocol 会在运行时
+                    // 根据 url 协议头加载指定的 Protocol 实例，并调用实例的 refer 方法
                     invokers.add(refprotocol.refer(interfaceClass, url));
                     if (Constants.REGISTRY_PROTOCOL.equals(url.getProtocol())) {
                         registryURL = url; // use last registry url
@@ -409,7 +426,9 @@ public class ReferenceConfig<T> extends AbstractReferenceConfig {
                 }
                 if (registryURL != null) { // registry url is available
                     // use AvailableCluster only when register's cluster is available
+                    // 如果注册中心链接不为空，则将使用 AvailableCluster
                     URL u = registryURL.addParameterIfAbsent(Constants.CLUSTER_KEY, AvailableCluster.NAME);
+                    // 创建 StaticDirectory 实例，并由 Cluster 对多个 Invoker 进行合并
                     invoker = cluster.join(new StaticDirectory(u, invokers));
                 } else { // not a registry url
                     invoker = cluster.join(new StaticDirectory(invokers));
@@ -440,6 +459,7 @@ public class ReferenceConfig<T> extends AbstractReferenceConfig {
             logger.info("Refer dubbo service " + interfaceClass.getName() + " from url " + invoker.getUrl());
         }
         // create service proxy
+        // 生成代理类
         return (T) proxyFactory.getProxy(invoker);
     }
 

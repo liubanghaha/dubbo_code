@@ -42,6 +42,7 @@ public abstract class AbstractProxyFactory implements ProxyFactory {
             String[] types = Constants.COMMA_SPLIT_PATTERN.split(config);
             if (types != null && types.length > 0) {
                 interfaces = new Class<?>[types.length + 2];
+                // 设置服务接口类和 EchoService.class 到 interfaces 中
                 interfaces[0] = invoker.getInterface();
                 interfaces[1] = EchoService.class;
                 for (int i = 0; i < types.length; i++) {

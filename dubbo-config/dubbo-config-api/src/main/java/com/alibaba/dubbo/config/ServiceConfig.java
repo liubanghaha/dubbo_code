@@ -357,7 +357,9 @@ public class ServiceConfig<T> extends AbstractServiceConfig {
 
     @SuppressWarnings({"unchecked", "rawtypes"})
     private void doExportUrls() {
+        // 加载注册中心链接
         List<URL> registryURLs = loadRegistries(true);
+        // 遍历 protocols，并在每个协议下导出服务
         for (ProtocolConfig protocolConfig : protocols) {
             doExportUrlsFor1Protocol(protocolConfig, registryURLs);
         }
@@ -365,6 +367,7 @@ public class ServiceConfig<T> extends AbstractServiceConfig {
 
     private void doExportUrlsFor1Protocol(ProtocolConfig protocolConfig, List<URL> registryURLs) {
         String name = protocolConfig.getName();
+        // 如果协议名为空，或空串，则将协议名变量设置为 dubbo
         if (name == null || name.length() == 0) {
             name = "dubbo";
         }
@@ -466,13 +469,16 @@ public class ServiceConfig<T> extends AbstractServiceConfig {
             map.put("notify", "false");
         }
         // export service
+        // 获取上下文路径
         String contextPath = protocolConfig.getContextpath();
         if ((contextPath == null || contextPath.length() == 0) && provider != null) {
             contextPath = provider.getContextpath();
         }
 
+        // 获取 host 和 port
         String host = this.findConfigedHosts(protocolConfig, registryURLs, map);
         Integer port = this.findConfigedPorts(protocolConfig, name, map);
+        // 组装 URL
         URL url = new URL(name, host, port, (contextPath == null || contextPath.length() == 0 ? "" : contextPath + "/") + path, map);
 
         if (ExtensionLoader.getExtensionLoader(ConfiguratorFactory.class)
@@ -513,7 +519,7 @@ public class ServiceConfig<T> extends AbstractServiceConfig {
 
                         Invoker<?> invoker = proxyFactory.getInvoker(ref, (Class) interfaceClass, registryURL.addParameterAndEncoded(Constants.EXPORT_KEY, url.toFullString()));
                         DelegateProviderMetaDataInvoker wrapperInvoker = new DelegateProviderMetaDataInvoker(invoker, this);
-
+                        // 暴露服务
                         Exporter<?> exporter = protocol.export(wrapperInvoker);
                         exporters.add(exporter);
                     }
@@ -531,12 +537,14 @@ public class ServiceConfig<T> extends AbstractServiceConfig {
 
     @SuppressWarnings({"unchecked", "rawtypes"})
     private void exportLocal(URL url) {
+        // 如果 URL 的协议头等于 injvm，说明已经导出到本地了，无需再次导出
         if (!Constants.LOCAL_PROTOCOL.equalsIgnoreCase(url.getProtocol())) {
             URL local = URL.valueOf(url.toFullString())
                     .setProtocol(Constants.LOCAL_PROTOCOL)
                     .setHost(LOCALHOST)
                     .setPort(0);
             StaticContext.getContext(Constants.SERVICE_IMPL_CLASS).put(url.getServiceKey(), getServiceClass(ref));
+            // 创建 Invoker，并导出服务，这里的 protocol 会在运行时调用 InjvmProtocol 的export 方法
             Exporter<?> exporter = protocol.export(
                     proxyFactory.getInvoker(ref, (Class) interfaceClass, local));
             exporters.add(exporter);
